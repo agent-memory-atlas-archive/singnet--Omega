@@ -1,6 +1,7 @@
 import os
 import logging
 import pathlib
+import re
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -9,6 +10,11 @@ _REPO = pathlib.Path(__file__).parent.parent.resolve()
 _CONFIG = {}
 _COMMAND_LINE = {}
 _CONFIG_FILE = {}
+
+_INTEGER_LITERAL = re.compile(r"^[+-]?(?:0|[1-9][0-9]*)$")
+_FLOAT_LITERAL = re.compile(
+    r"^[+-]?(?!0[0-9])(?:(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+)$"
+)
 
 def init_config(command_line):
     """Initialize configuration: drop configuration cache and load
@@ -50,6 +56,15 @@ def _cache_config(key, value, source):
     logger.info(f"Configuration item resolved using {source}: {key}={value}")
     return value
 
+def _command_line_value(value):
+    """Convert unambiguous numeric command-line values without altering strings."""
+    if _INTEGER_LITERAL.fullmatch(value):
+        return int(value)
+    if _FLOAT_LITERAL.fullmatch(value):
+        return float(value)
+    return value
+
+
 def command_line_to_dict(list):
     """Converts list of <key>=<value> pairs into Python dictionary. If
     parameter doesn't include "=" it is added as a boolean value
@@ -58,7 +73,7 @@ def command_line_to_dict(list):
     for arg in list:
         kv = arg.split("=", 1)
         if len(kv) == 2:
-            dict[kv[0]] = kv[1]
+            dict[kv[0]] = _command_line_value(kv[1])
         else:
             dict[kv[0]] = True
     return dict
