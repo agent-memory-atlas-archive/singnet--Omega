@@ -39,10 +39,21 @@ def config_get_by_key(key, default=None):
     parameters, (2) environment variable with OMEGA_$key name, (3)
     configuration file, (4) use $default value."""
     global _CONFIG, _COMMAND_LINE, _CONFIG_FILE
+    if key in _COMMAND_LINE:
+        value = _COMMAND_LINE[key]
+        expected = default if default is not None else _CONFIG_FILE.get(key)
+        if type(expected) in (int, float):
+            if value is True:
+                raise ValueError(
+                    f"{key} requires a numeric value; use {key}=<number>"
+                )
+            value = _command_line_value(value)
+        # A later caller can supply a type that an earlier lookup did not know.
+        if key in _CONFIG and type(_CONFIG[key]) is type(value) and _CONFIG[key] == value:
+            return _CONFIG[key]
+        return _cache_config(key, value, "command line")
     if key in _CONFIG:
         return _CONFIG.get(key)
-    if key in _COMMAND_LINE:
-        return _cache_config(key, _COMMAND_LINE.get(key), "command line")
     envkey = f"OMEGA_{key}"
     if envkey in os.environ:
         return _cache_config(key, os.environ.get(envkey), "environment variable")
@@ -57,7 +68,7 @@ def _cache_config(key, value, source):
     return value
 
 def _command_line_value(value):
-    """Convert unambiguous numeric command-line values without altering strings."""
+    """Parse a CLI value for a setting known to be numeric."""
     if _INTEGER_LITERAL.fullmatch(value):
         return int(value)
     if _FLOAT_LITERAL.fullmatch(value):
@@ -73,7 +84,7 @@ def command_line_to_dict(list):
     for arg in list:
         kv = arg.split("=", 1)
         if len(kv) == 2:
-            dict[kv[0]] = _command_line_value(kv[1])
+            dict[kv[0]] = kv[1]
         else:
             dict[kv[0]] = True
     return dict
